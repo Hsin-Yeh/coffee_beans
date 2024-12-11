@@ -6,7 +6,7 @@ import sqlite3
 conn = sqlite3.connect('coffee_database.db')
 cursor = conn.cursor()
 
-# Create the coffee_beans table
+# Create the coffee_beans table if it doesn't exist
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS coffee_beans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,17 +18,25 @@ cursor.execute('''
 
 # Define the coffee bean data to be added
 coffee_data = [
-    ('Colombia', 'El Paraiso Diego Litchi', 'Light roasted')
+    ('Colombia', 'El Paraiso Diego Litchi', 'Light roasted'),
+    ('Ethiopia', 'YIRGACHEFFE', 'Light roasted')
 ]
 
 # Insert the coffee bean data into the database
 cursor.executemany('''
-    INSERT INTO coffee_beans (country, bean_name, roast_level)
+    INSERT OR REPLACE INTO coffee_beans (country, bean_name, roast_level)
     VALUES (?, ?, ?)
 ''', coffee_data)
 
 # Commit changes and close the connection
 conn.commit()
+
+# Verify the data was inserted correctly
+cursor.execute("SELECT * FROM coffee_beans")
+rows = cursor.fetchall()
+for row in rows:
+    print(row)
+
 conn.close()
 
-print("Database created, table set up, and coffee bean data added successfully.")
+print("Database updated successfully.")

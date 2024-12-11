@@ -48,7 +48,6 @@ function showCoffeeInfo(country) {
             } else {
                 content += '<p>No coffee beans recorded for this country yet.</p>';
             }
-            content += `<button onclick="showCoffeeForm('${country}')">Add New Coffee</button>`;
 
             const popup = L.popup()
                 .setLatLng(map.getCenter())
@@ -56,6 +55,14 @@ function showCoffeeInfo(country) {
                 .openOn(map);
         });
 }
+
+// Update the click event listener
+map.addEventListener('click', function(e) {
+    if (e.target.classList.contains('leaflet-interactive')) {
+        const country = e.target.querySelector('.leaflet-popup-content').textContent.trim();
+        showCoffeeInfo(country);
+    }
+});
 
 function submitCoffeeData(country) {
     const data = {
