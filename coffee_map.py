@@ -1,102 +1,52 @@
 #!/usr/bin/env python3
 
 import folium
-import json
+from folium.plugins import MarkerCluster
+from coffee_db import CoffeeDB
 
-# Create a world map
-world_map = folium.Map(location=[0, 0], zoom_start=2)
+class CoffeeMap:
+    def __init__(self, db_path):
+        self.db = CoffeeDB(db_path)
+        self.map = folium.Map(location=[0, 0], zoom_start=2)
+        self.marker_cluster = MarkerCluster().add_to(self.map)
 
-# Load country data
-with open('countries.geojson') as f:
-    countries = json.load(f)
+    def add_country_markers(self):
+        countries = self.db.get_all_countries()
+        for country in countries:
+            coordinates = self.db.get_country_coordinates(country)
+            if coordinates:
+                self._add_country_marker(country, coordinates)
 
-# Add clickable polygons for each country
-folium.GeoJson(
-    countries,
-    style_function=lambda feature: {
-        'fillColor': 'lightgreen',
-        'color': 'black',
-        'weight': 2,
-        'fillOpacity': 0.7,
-    },
-    tooltip=folium.GeoJsonTooltip(fields=['ADMIN'], aliases=['Country']),
-    popup=folium.GeoJsonPopup(fields=['ADMIN'], aliases=['Country'])
-).add_to(world_map)
+    def _add_country_marker(self, country, coordinates):
+        country_info = self.db.get_country_info(country)
+        if country_info:
+            popup_content = self._create_popup_content(country_info)
+            folium.Marker(
+                location=coordinates,
+                popup=folium.Popup(popup_content, max_width=300),
+                tooltip=country
+            ).add_to(self.marker_cluster)
 
-# Add custom JavaScript for interactivity
-custom_js = """
-<script>
-document.addEventListener('DOMContentLoaded', (event) => {
-    const map = document.querySelector('.folium-map');
-    map.addEventListener('click', function(e) {
-        if (e.target.classList.contains('leaflet-interactive')) {
-            const country = e.target.querySelector('.leaflet-popup-content').textContent.trim();
-            showCoffeeInfo(country);
-        }
-    });
-});
+    def _create_popup_content(self, country_info):
+        info = country_info[0]
+        content = f"""
+        <b>Country:</b> {info['country']}<br>
+        <b>Region:</b> {info['region']}<br>
+        <b>Variety:</b> {info['variety']}<br>
+        <b>Processing Method:</b> {info['processing_method']}<br>
+        <b>Aroma:</b> {info['aroma']:.2f}<br>
+        <b>Flavor:</b> {info['flavor']:.2f}<br>
+        <b>Aftertaste:</b> {info['aftertaste']:.2f}<br>
+        <b>Acidity:</b> {info['acidity']:.2f}<br>
+        <b>Body:</b> {info['body']:.2f}<br>
+        <b>Balance:</b> {info['balance']:.2f}<br>
+        <b>Overall:</b> {info['overall']:.2f}<br>
+        <b>Total Cup Points:</b> {info['total_cup_points']:.2f}<br>
+        """
+        return content
 
-function showCoffeeInfo(country) {
-    fetch(`/get_coffee/${country}`)
-        .then(response => response.json())
-        .then(data => {
-            let content = `<h3>Coffee Beans from ${country}</h3>`;
-            if (data.length > 0) {
-                data.forEach(bean => {
-                    content += `<p><strong>${bean[0]}</strong>: ${bean[1]}</p>`;
-                });
-            } else {
-                content += '<p>No coffee beans recorded for this country yet.</p>';
-            }
+    def get_map(self):
+        return self.map
 
-            const popup = L.popup()
-                .setLatLng(map.getCenter())
-                .setContent(content)
-                .openOn(map);
-        });
-}
-
-// Update the click event listener
-map.addEventListener('click', function(e) {
-    if (e.target.classList.contains('leaflet-interactive')) {
-        const country = e.target.querySelector('.leaflet-popup-content').textContent.trim();
-        showCoffeeInfo(country);
-    }
-});
-
-function submitCoffeeData(country) {
-    const data = {
-        country: country,
-        bean_name: document.getElementById('beanName').value,
-        roast_level: document.getElementById('roastLevel').value,
-        notes: document.getElementById('notes').value
-    };
-    fetch('/add_coffee', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Coffee added successfully!');
-            map.closePopup();
-        } else {
-            alert('Error adding coffee: ' + data.message);
-        }
-    })
-    .catch((error) => {
-        console.error('Error:', error);
-        alert('An error occurred while submitting the data.');
-    });
-}
-</script>
-"""
-
-# Add the custom JavaScript to the map
-world_map.get_root().html.add_child(folium.Element(custom_js))
-
-# Save the map as an HTML file
-world_map.save("templates/coffee_map.html")
+    def close_db(self):
+        self.db.close()
