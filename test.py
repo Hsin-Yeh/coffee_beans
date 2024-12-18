@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-
-#!/usr/bin/env python3
+# Coffee bean data sheet: https://docs.google.com/spreadsheets/d/1b8pcIIDMAoDf73Xqzg5i0373ZF1mMgiGYc2Efp96IhQ/edit?gid=0#gid=0
 
 import streamlit as st
 import folium
@@ -30,7 +29,9 @@ coffee_df = get_coffee_data()
 
 # Convert 'Altitude' to numeric and handle missing values
 coffee_df['Altitude'] = pd.to_numeric(coffee_df['Altitude'], errors='coerce')
-coffee_df['Altitude'] = coffee_df['Altitude'].fillna(coffee_df['Altitude'].mean())
+# coffee_df['Altitude'] = coffee_df['Altitude'].fillna(coffee_df['Altitude'].mean())
+coffee_df['Latitude'] = pd.to_numeric(coffee_df['Latitude'], errors='coerce')
+coffee_df['Longitude'] = pd.to_numeric(coffee_df['Longitude'], errors='coerce')
 
 # Aggregate data by country
 country_data = coffee_df.groupby('Country').agg({
@@ -40,6 +41,15 @@ country_data = coffee_df.groupby('Country').agg({
 
 # Merge coffee data with world data
 world = world.merge(country_data, left_on='NAME', right_on='Country', how='left')
+world['Coffee_Info'] = world.apply(
+    lambda row: "; ".join(
+        f"{village}: {flavors}" for village, flavors in zip(
+            coffee_df[coffee_df['Country'] == row['NAME']]['Village'],
+            coffee_df[coffee_df['Country'] == row['NAME']]['Flavors']
+        )
+    ) if row['NAME'] in coffee_df['Country'].values else "No data available",
+    axis=1
+)
 
 # Create a Streamlit app
 st.title('Interactive Coffee Map')
@@ -61,10 +71,27 @@ map_layers = {
 selected_layer = st.selectbox('Select map layer:', list(map_layers.keys()))
 
 # Create a Folium map
-m = folium.Map(location=[0, 0], zoom_start=2, width='100%', height='600px')
+m = folium.Map(location=[15, 250], zoom_start=2, width='100%', height='1000px')
 
 # Create color map
 colormap = LinearColormap(colors=['yellow', 'orange', 'red'], vmin=world[map_layers[selected_layer]].min(), vmax=world[map_layers[selected_layer]].max())
+
+# Add country polygons to the map
+tooltip = folium.GeoJsonTooltip(
+    fields=['NAME', 'Village', 'Altitude', 'Coffee_Info'],
+    aliases=['Country:', 'Number of Villages:', 'Average Altitude (m):', 'Coffee Details:'],
+    localize=True,
+    sticky=False,
+    labels=True,
+    style="""
+        background-color: #F0EFEF;
+        border: 2px solid black;
+        border-radius: 3px;
+        box-shadow: 3px;
+        padding: 10px;
+    """,
+    max_width=300,
+)
 
 # Add country polygons to the map
 folium.GeoJson(
@@ -77,6 +104,24 @@ folium.GeoJson(
     },
     tooltip=folium.GeoJsonTooltip(fields=['NAME', map_layers[selected_layer]], aliases=['Country:', f'{selected_layer}:']),
 ).add_to(m)
+
+# Add markers for coffee bean locations
+for idx, row in coffee_df.iterrows():
+    tooltip_html = f"""
+    <div style="font-family: Arial; font-size: 12px;">
+        <b>{row['Country']} - {row['Village']}</b><br>
+        Region: {row['Region']}<br>
+        Process: {row['Process']}<br>
+        Flavors: {row['Flavors']}<br>
+        Altitude: {row['Altitude']} m
+    </div>
+    """
+
+    folium.Marker(
+        location=[row['Latitude'], row['Longitude']],
+        tooltip=folium.Tooltip(tooltip_html, sticky=False),
+        icon=folium.Icon(color='red', icon='coffee', prefix='fa')
+    ).add_to(m)
 
 # Add colormap to the map
 colormap.add_to(m)
